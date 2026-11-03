@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang='id'>
+<head>
+<meta charset='utf-8'>
+<title>Dashboard Akademik</title>
+<style>
+  body{font-family:sans-serif;max-width:960px;margin:2rem auto;padding:0 1rem}
+  table{border-collapse:collapse;width:100%;margin:.5rem 0}
+  th,td{border:1px solid #ccc;padding:6px;text-align:left}
+  input,select,button{margin:2px;padding:5px}
+  #msg{color:#b00020;min-height:1.2em}
+</style>
+</head>
+<body>
+<h1>Dashboard Akademik</h1>
+<p id='msg'></p>
+
+<h2>Mahasiswa</h2>
+<form id='f-mhs'>
+  <input name='nim' placeholder='NIM' required>
+  <input name='nama' placeholder='Nama' required>
+  <input name='email' placeholder='Email'>
+  <input name='angkatan' type='number' placeholder='Angkatan'>
+  <button>Tambah</button>
+</form>
+<table id='t-mhs'></table>
+
+<h2>Mata Kuliah</h2>
+<form id='f-mk'>
+  <input name='kode' placeholder='Kode' required>
+  <input name='nama' placeholder='Nama' required>
+  <input name='sks' type='number' placeholder='SKS' required>
+  <input name='semester' type='number' placeholder='Semester'>
+  <button>Tambah</button>
+</form>
+<table id='t-mk'></table>
+
+<h2>Pengambilan Mata Kuliah (KRS)</h2>
+<form id='f-krs'>
+  <select id='s-mhs'></select>
+  <select id='s-mk'></select>
+  <button>Ambil</button>
+</form>
+<table id='t-krs'></table>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+let mhsList = [], mkList = [], krsList = [];
+
+async function api(url, method = 'GET', body) {
+  const r = await fetch(url, {
+    method,
+    headers: {'Content-Type': 'application/json'},
+    body: body ? JSON.stringify(body) : undefined
+  });
+  const d = r.status === 204 ? {} : await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || 'Error ' + r.status);
+  return d;
+}
+
+async function run(fn) {
+  try { $('#msg').textContent = ''; await fn(); await load(); }
+  catch (e) { $('#msg').textContent = e.message; }
+}
+
+const formData = f => Object.fromEntries([...new FormData(f)].map(([k, v]) =>
+  [k, f[k].type === 'number' ? (v === '' ? null : Number(v)) : v]));
+
+async function load() {
+  [mhsList, mkList] = await Promise.all([api('/mahasiswa'), api('/matkul')]);
+
+  $('#t-mhs').innerHTML =
+    '<tr><th>NIM</th><th>Nama</th><th>Email</th><th>Angkatan</th><th>Aksi</th></tr>' +
+    mhsList.map((m, i) => `<tr><td>${esc(m.nim)}</td><td>${esc(m.nama)}</td>
+      <td>${esc(m.email)}</td><td>${esc(m.angkatan)}</td>
+      <td><button onclick='editMhs(${i})'>Edit</button>
+      <button onclick='delMhs(${i})'>Hapus</button></td></tr>`).join('');
+
+  $('#t-mk').innerHTML =
+    '<tr><th>Kode</th><th>Nama</th><th>SKS</th><th>Semester</th><th>Aksi</th></tr>' +
+    mkList.map((k, i) => `<tr><td>${esc(k.kode)}</td><td>${esc(k.nama)}</td>
+      <td>${esc(k.sks)}</td><td>${esc(k.semester)}</td>
+      <td><button onclick='editMk(${i})'>Edit</button>
+      <button onclick='delMk(${i})'>Hapus</button></td></tr>`).join('');
+
+  const cur = $('#s-mhs').value;
+  $('#s-mhs').innerHTML = mhsList.map(m =>
+    `<option value='${esc(m.nim)}'>${esc(m.nim)} - ${esc(m.nama)}</option>`).join('');
+  $('#s-mhs').value = cur;
+  $('#s-mk').innerHTML = mkList.map(k =>
+    `<option value='${esc(k.kode)}'>${esc(k.kode)} - ${esc(k.nama)}</option>`).join('');
+  await loadKrs();
+}
+
+async function loadKrs() {
+  const nim = $('#s-mhs').value;
+  if (!nim) { $('#t-krs').innerHTML = ''; krsList = []; return; }
+  krsList = await api(`/mahasiswa/${encodeURIComponent(nim)}/matkul`);
+  $('#t-krs').innerHTML = '<tr><th>Kode</th><th>Nama</th><th>SKS</th><th>Aksi</th></tr>' +
+    krsList.map((k, i) => `<tr><td>${esc(k.kode_mk)}</td><td>${esc(k.nama)}</td>
+      <td>${esc(k.sks)}</td><td><button onclick='batal(${i})'>Batal</button></td></tr>`).join('');
+}
+
+$('#s-mhs').onchange = () => run(() => Promise.resolve());
+$('#f-mhs').onsubmit = e => { e.preventDefault();
+  run(async () => { await api('/mahasiswa', 'POST', formData(e.target)); e.target.reset(); }); };
+$('#f-mk').onsubmit = e => { e.preventDefault();
+  run(async () => { await api('/matkul', 'POST', formData(e.target)); e.target.reset(); }); };
+$('#f-krs').onsubmit = e => { e.preventDefault();
+  run(() => api(`/mahasiswa/${encodeURIComponent($('#s-mhs').value)}/matkul`, 'POST', {kode_mk: $('#s-mk').value})); };
+
+const editMhs = i => { const n = prompt('Nama baru:', mhsList[i].nama);
+  if (n) run(() => api('/mahasiswa/' + mhsList[i].nim, 'PUT', {nama: n})); };
+const delMhs = i => confirm('Hapus mahasiswa ini?') &&
+  run(() => api('/mahasiswa/' + mhsList[i].nim, 'DELETE'));
+const editMk = i => { const n = prompt('Nama baru:', mkList[i].nama);
+  if (n) run(() => api('/matkul/' + mkList[i].kode, 'PUT', {nama: n})); };
+const delMk = i => confirm('Hapus mata kuliah ini?') &&
+  run(() => api('/matkul/' + mkList[i].kode, 'DELETE'));
+const batal = i => run(() =>
+  api(`/mahasiswa/${encodeURIComponent($('#s-mhs').value)}/matkul/${krsList[i].kode_mk}`, 'DELETE'));
+
+run(() => Promise.resolve());
+</script>
+</body>
+</html>
