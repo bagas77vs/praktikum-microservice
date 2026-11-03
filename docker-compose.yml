@@ -1,0 +1,53 @@
+services:
+  gateway:
+    build: ./gateway
+    ports:
+      - '8080:80'
+    depends_on:
+      - mahasiswa-service
+      - matkul-service
+    restart: unless-stopped
+
+  mahasiswa-service:
+    build: ./mahasiswa-service
+    ports:
+      - '5001:5000' # hanya untuk uji mandiri
+    environment:
+      DATABASE_URL: mysql+pymysql://mhs_user:mhs_pass@mysql-db:3306/mahasiswa_db
+      MATKUL_URL: http://matkul-service:5000
+    depends_on:
+      - mysql-db
+    restart: unless-stopped
+
+  matkul-service:
+    build: ./matkul-service
+    ports:
+      - '5002:5000' # hanya untuk uji mandiri
+    environment:
+      DATABASE_URL: postgresql+psycopg2://mk_user:mk_pass@postgres-db:5432/matkul_db
+    depends_on:
+      - postgres-db
+    restart: unless-stopped
+
+  mysql-db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: mahasiswa_db
+      MYSQL_USER: mhs_user
+      MYSQL_PASSWORD: mhs_pass
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  postgres-db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: matkul_db
+      POSTGRES_USER: mk_user
+      POSTGRES_PASSWORD: mk_pass
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+volumes:
+  mysql_data:
+  pg_data:
