@@ -11,7 +11,7 @@ services:
   mahasiswa-service:
     build: ./mahasiswa-service
     ports:
-      - '5001:5000' # hanya untuk uji mandiri
+      - '5001:5000'   # hanya untuk uji mandiri
     environment:
       DATABASE_URL: mysql+pymysql://mhs_user:mhs_pass@mysql-db:3306/mahasiswa_db
       MATKUL_URL: http://matkul-service:5000
@@ -22,7 +22,7 @@ services:
   matkul-service:
     build: ./matkul-service
     ports:
-      - '5002:5000' # hanya untuk uji mandiri
+      - '5002:5000'   # hanya untuk uji mandiri
     environment:
       DATABASE_URL: postgresql+psycopg2://mk_user:mk_pass@postgres-db:5432/matkul_db
     depends_on:
